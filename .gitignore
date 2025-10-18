@@ -1,0 +1,22 @@
+# Virtual environments
+.venv/
+env/
+
+# Python cache
+__pycache__/
+
+# Databases and vector data
+*.db
+/data/
+chroma_db/
+
+# Streamlit cache
+.streamlit/
+
+# Environment variables
+.env
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
