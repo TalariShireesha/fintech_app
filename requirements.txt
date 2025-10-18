@@ -1,14 +1,22 @@
+# --- Core Framework ---
 streamlit==1.38.0
+
+# --- LangChain Ecosystem (RAG + Agents) ---
 langchain==0.2.14
 langchain-core==0.2.43
 langchain-community==0.2.12
 langchain-openai==0.1.22
 langchain-chroma==0.1.4
-langchain-experimental==0.0.62
+
+# --- Lightweight Addons ---
 openai==1.42.0
 chromadb==0.5.5
 SQLAlchemy==2.0.30
-pandas==2.2.2
+pandas==2.2.1
 tiktoken
 python-dotenv
 yfinance
+
+# --- Optional (Safe to Keep) ---
+faiss-cpu
+requests
