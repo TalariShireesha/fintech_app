@@ -7,12 +7,11 @@ from datetime import datetime
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.runnables import ConfigurableFieldSpec,RunnableLambda
+from langchain_core.runnables import ConfigurableFieldSpec, RunnableLambda
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_tool_calling_agent
 from langchain.agents.agent import AgentExecutor
-
 
 # Import project modules
 #from utils import setup_database
@@ -62,24 +61,31 @@ if "user_email" not in st.session_state:
 if "email_submitted" not in st.session_state:
     st.session_state.email_submitted = False
 
+
 # Chat message history management
+#This function manages per-user, per-conversation memory using Streamlit session state and LangChain’s ChatMessageHistory
 def get_session_history(user_id: str, conversation_id: str) -> ChatMessageHistory:
     if (user_id, conversation_id) not in st.session_state.store:
-        st.session_state.store[(user_id, conversation_id)] = ChatMessageHistory()
-    return st.session_state.store[(user_id, conversation_id)]
+        st.session_state.store[(user_id, conversation_id)] = ChatMessageHistory()  #create new history object if not exists
+    return st.session_state.store[(user_id, conversation_id)]      #this line tells to return the history object for the given user_id and conversation_id
 
-def create_new_conversation():
-    st.session_state.conversation_counter += 1
-    new_conv_id = str(uuid.uuid4())
-    st.session_state.conversations[new_conv_id] = {
+
+#this function creates a new conversation and updates the session state accordingly
+def create_new_conversation(): 
+    st.session_state.conversation_counter += 1   #Increment conversation counter
+    new_conv_id = str(uuid.uuid4())     #Creates a unique conversation ID
+    st.session_state.conversations[new_conv_id] = {      #Each conversation has: A number (for display) and Empty message list
         "number": st.session_state.conversation_counter,
         "messages": []
     }
     st.session_state.current_conversation_id = new_conv_id
 
+
 def switch_conversation(conv_id):
     st.session_state.current_conversation_id = conv_id
 
+
+#This function captures user input and appends it to the active conversation’s message history before invoking the agent.
 def handle_chat_input(prompt, agent_executor_with_history):
     current_conv = st.session_state.conversations[st.session_state.current_conversation_id]
     current_conv["messages"].append({"role": "user", "content": prompt})
@@ -96,6 +102,8 @@ def handle_chat_input(prompt, agent_executor_with_history):
         response_container = st.empty()
         response_container.markdown("Thinking...")
         
+        #this try and except block handles errors during agent invocation and updates the chat accordingly and 
+        # appends the error message to the conversation history
         try:
             result = agent_executor_with_history.invoke(
                 {"input": prompt},
@@ -107,6 +115,7 @@ def handle_chat_input(prompt, agent_executor_with_history):
         except Exception as e:
             response_container.markdown(f"Error: {str(e)}")
             current_conv["messages"].append({"role": "assistant", "content": f"Error: {str(e)}"})
+
 
 def setup_agent(tools):
     # Define agent prompt
@@ -133,19 +142,19 @@ Never make up information - if you don't know or need more data, say so.
         ("system", system_message),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad")
+        MessagesPlaceholder(variable_name="agent_scratchpad")   #this line allows the agent to keep track of its thought process and actions
     ])
     
     # Create the agent using tool calling approach
     agent = create_tool_calling_agent(llm, tools, prompt)
-    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)  #verbose=True enables detailed logging of the agent's operations
     
     # Create a combined runnable with message history
     agent_executor_with_history = RunnableWithMessageHistory(
         agent_executor,
-        get_session_history,
+        get_session_history,         #Fetches chat history from st.session_state
         input_messages_key="input",
-        history_messages_key="chat_history",
+        history_messages_key="chat_history",   #Inject previous messages into the prompt under the variable chat_history”
         history_factory_config=[
             ConfigurableFieldSpec(
                 id="user_id",
@@ -162,14 +171,32 @@ Never make up information - if you don't know or need more data, say so.
     
     return agent_executor_with_history
 
+
+def reset_user_email():
+    st.session_state.email_submitted = False
+    st.session_state.user_email = ""
+    st.session_state.user_id = ""
+
+
 def set_role(role):
     st.session_state.role = role
     # Reset email and user_id when switching roles
     if role == "user":
-        st.session_state.email_submitted = False
-        st.session_state.user_email = ""
-        st.session_state.user_id = ""
-    
+        reset_user_email()
+
+
+def show_sample_questions():
+    st.subheader("Sample Questions")
+    st.markdown("""
+    - What's my current spending by category?
+    - What's the price of AAPL stock?
+    - How should I start investing with $1000?
+    - Calculate a monthly mortgage payment for $300,000
+    - What are the latest news about interest rates?
+    - Show me my investment portfolio performance
+    """)
+
+
 # Admin interface for uploading RAG content
 def show_admin_interface(rag_manager):
     st.title("💰 Fintech Knowledge Administration")
@@ -194,7 +221,6 @@ def show_admin_interface(rag_manager):
             
             # Clean up the temporary file
             os.unlink(temp_path)
-    
 
 
 # User interface for chatting with the assistant
@@ -218,16 +244,8 @@ def show_user_interface(agent_executor_with_history):
             else:
                 st.error("Please enter a valid email address.")
         
-        # Show sample questions but disable chat until email is submitted
         st.sidebar.subheader("Sample Questions")
-        st.sidebar.markdown("""
-        - What's my current spending by category?
-        - What's the price of AAPL stock?
-        - How should I start investing with $1000?
-        - Calculate a monthly mortgage payment for $300,000
-        - What are the latest news about interest rates?
-        - Show me my investment portfolio performance
-        """)
+        show_sample_questions()
         return
     
     # Sidebar for conversation management
@@ -254,15 +272,7 @@ def show_user_interface(agent_executor_with_history):
                 switch_conversation(selected_conv)
         
         st.divider()
-        st.subheader("Sample Questions")
-        st.markdown("""
-        - What's my current spending by category?
-        - What's the price of AAPL stock?
-        - How should I start investing with $1000?
-        - Calculate a monthly mortgage payment for $300,000
-        - What are the latest news about interest rates?
-        - Show me my investment portfolio performance
-        """)
+        show_sample_questions()
     
     # Main chat interface
     current_conv = st.session_state.conversations[st.session_state.current_conversation_id]
@@ -271,9 +281,7 @@ def show_user_interface(agent_executor_with_history):
     with st.sidebar:
         st.caption(f"Logged in as: {st.session_state.user_id}")
         if st.button("Change Email"):
-            st.session_state.email_submitted = False
-            st.session_state.user_email = ""
-            st.session_state.user_id = ""
+            reset_user_email()
             st.rerun()
     
     # Display chat messages for current conversation
@@ -285,6 +293,7 @@ def show_user_interface(agent_executor_with_history):
     if prompt := st.chat_input("Ask about your finances..."):
         handle_chat_input(prompt, agent_executor_with_history)
 
+
 def submit_email(email):
     """Handle email submission and validate it"""
     # Basic email validation
@@ -295,6 +304,7 @@ def submit_email(email):
         return True
     else:
         return False
+
 
 # Main app
 def main():
@@ -314,11 +324,13 @@ def main():
         if selected_role != st.session_state.role:
             set_role(selected_role)
             st.rerun()
+    
     # Show interface based on role
     if st.session_state.role == "admin":
         show_admin_interface(rag_manager)
     else:
         show_user_interface(agent_executor_with_history)
 
+
 if __name__ == "__main__":
-    main() 
+    main()
